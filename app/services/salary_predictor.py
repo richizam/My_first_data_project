@@ -19,7 +19,7 @@ class SalaryPredictor:
             return float(rounded_prediction)
         except Exception as e:
             print(f"Error in salary prediction: {e}")
-            return 0.0  # Return a default value if prediction fails
+            return 0.0
 
 # Initialize the predictor
 try:

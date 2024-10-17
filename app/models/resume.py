@@ -13,4 +13,4 @@ class Resume(Base):
     job_type = Column(String)
     seniority_level = Column(String)
     is_remote = Column(Integer)
-    predicted_salary = Column(Float, nullable=True)
+    predicted_salary = Column(Float)

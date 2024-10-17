@@ -2,11 +2,11 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.models.resume import Base
 from app.database.database import engine
-from app.models import resume as resume_model
-from app.routes import resume
+from app.routes import resume as resume_route
 
-resume_model.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Resume Analyzer API")
 
@@ -19,7 +19,7 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-app.include_router(resume.router, prefix="/api/v1", tags=["resumes"])
+app.include_router(resume_route.router, prefix="/api/v1", tags=["resumes"])
 
 @app.get("/")
 def read_root():

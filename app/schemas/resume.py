@@ -1,6 +1,5 @@
 #schemas/resume.py
 from pydantic import BaseModel, Field
-from typing import Optional
 
 class ResumeBase(BaseModel):
     title: str
@@ -12,11 +11,11 @@ class ResumeBase(BaseModel):
     is_remote: int
 
 class ResumeCreate(ResumeBase):
-    predicted_salary: Optional[float] = Field(default=None)
+    predicted_salary: float = Field(default=0.0)
 
 class Resume(ResumeBase):
     id: int
-    predicted_salary: Optional[float] = None
+    predicted_salary: float
 
     class Config:
-        from_attributes = True
+        orm_mode = True
