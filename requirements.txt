@@ -15,5 +15,6 @@ xgboost
 streamlit
 plotly
 streamlit-lottie
-pytest
 httpx
+pika
+requests

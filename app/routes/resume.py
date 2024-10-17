@@ -1,4 +1,5 @@
-#routes/resume.py
+# routes/resume.py
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
@@ -7,6 +8,7 @@ from app.schemas import resume as schemas
 from app.database.database import get_db
 from app.services.pdf_parser import parse_pdf, extract_information
 from app.services.salary_predictor import salary_predictor
+from app.rabbitmq import publish_resume_task
 
 router = APIRouter()
 
@@ -19,15 +21,22 @@ async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_
     extracted_info = extract_information(parsed_text)
     print("Extracted info:", extracted_info)  # Debug print
 
-    if salary_predictor is not None:
-        predicted_salary = salary_predictor.predict(extracted_info)
-    else:
-        predicted_salary = 0.0
+    # Определение уровня должности будет перенесено в воркер
 
-    extracted_info['predicted_salary'] = predicted_salary
+    # Создание задачи для воркера
+    task_data = {
+        "extracted_info": extracted_info
+    }
 
-    resume = schemas.ResumeCreate(**extracted_info)
-    return crud.create_resume(db=db, resume=resume)
+    try:
+        publish_resume_task(task_data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка при отправке задачи: {e}")
+
+    # Можно создать запись в БД со статусом "В обработке"
+    resume_create = schemas.ResumeCreate(**extracted_info)
+    db_resume = crud.create_resume(db=db, resume=resume_create, status="processing")
+    return db_resume
 
 @router.get("/resumes/", response_model=List[schemas.Resume])
 def read_resumes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

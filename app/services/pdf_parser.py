@@ -1,4 +1,4 @@
-#pdf_parser.py
+# services/pdf_parser.py
 
 import pdfplumber
 import re
@@ -34,7 +34,7 @@ def extract_information(parsed_text):
         
         experience = round(years + months / 12, 1)
     else:
-        experience = 0  # Corrected indentation
+        experience = 0
 
     # Extract key skills
     skills_match = re.search(r"Ключевые навыки\n(.*?)\n\n", parsed_text, re.DOTALL | re.IGNORECASE)
@@ -55,15 +55,7 @@ def extract_information(parsed_text):
     job_type_match = re.search(r"Занятость:\s*(.*?)(?=\n|$)", parsed_text, re.IGNORECASE)
     job_type = job_type_match.group(1) if job_type_match else "Unknown"
 
-    # Extract seniority level
-    def extract_seniority(title):
-        if 'junior' in title.lower():
-            return 'Junior'
-        elif 'senior' in title.lower():
-            return 'Senior'
-        else:
-            return 'Mid-level'
-    seniority_level = extract_seniority(title)
+    # Seniority level будет определяться воркером
 
     # Check if remote
     is_remote = 1 if 'remote' in location.lower() else 0
@@ -74,6 +66,5 @@ def extract_information(parsed_text):
         'key_skills': key_skills,
         'location': location,
         'job_type': job_type,
-        'seniority_level': seniority_level,
         'is_remote': is_remote
     }

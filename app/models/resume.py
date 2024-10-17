@@ -1,4 +1,5 @@
-#models/resume.py
+# models/resume.py
+
 from sqlalchemy import Column, Integer, String, Float
 from app.database.database import Base
 
@@ -14,3 +15,4 @@ class Resume(Base):
     seniority_level = Column(String)
     is_remote = Column(Integer)
     predicted_salary = Column(Float)
+    status = Column(String, default="processing")  # Новое поле
