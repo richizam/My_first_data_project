@@ -1,5 +1,7 @@
 #streamlit_app.py
 
+# webview/streamlit_app.py
+
 import streamlit as st
 import requests
 import pandas as pd
@@ -9,6 +11,7 @@ from streamlit_lottie import st_lottie
 import json
 import os
 from datetime import datetime
+import time
 
 # Set the API URL
 API_URL = os.getenv("API_URL", "http://web:8000/api/v1")
@@ -147,77 +150,98 @@ with tab2:
         st.write("Загруженный файл:", uploaded_file.name)
 
         if st.button("Анализировать резюме"):
-            with st.spinner("Анализ резюме..."):
+            with st.spinner("Загрузка резюме и ожидание обработки..."):
                 files = {"file": ("resume.pdf", uploaded_file.getvalue(), "application/pdf")}
                 response = requests.post(f"{API_URL}/resumes/upload", files=files)
 
             if response.status_code == 200:
                 result = response.json()
-                st.success("Резюме успешно проанализировано!")
+                st.success("Резюме успешно загружено и ожидает обработки!")
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader("Детали резюме")
-                    st.write(f"**Должность:** {result['title']}")
-                    st.write(f"**Опыт:** {result['experience']} лет")
-                    st.write(f"**Местоположение:** {result['location']}")
-                    st.write(f"**Тип работы:** {result['job_type']}")
-                    st.write(f"**Уровень должности:** {result['seniority_level']}")
-                    st.write(f"**Удаленная работа:** {'Да' if result['is_remote'] else 'Нет'}")
-                
-                with col2:
-                    st.subheader("Рекомендуемые курсы")
-                    # Define a list of desired skills
-                    desired_skills = ["Python", "Machine Learning", "Data Analysis", "SQL", "Deep Learning"]
-                    
-                    # Extract skills from the resume
-                    resume_skills = set(result['key_skills'].split(', '))
-                    
-                    # Find missing skills
-                    missing_skills = set(desired_skills) - resume_skills
-                    
-                    # Coursera course recommendations (you can expand this dictionary)
-                    coursera_courses = {
-                        "Python": "https://www.coursera.org/learn/python",
-                        "Machine Learning": "https://www.coursera.org/learn/machine-learning",
-                        "Data Analysis": "https://www.coursera.org/learn/data-analysis-with-python",
-                        "SQL": "https://www.coursera.org/learn/sql-for-data-science",
-                        "Deep Learning": "https://www.coursera.org/specializations/deep-learning"
-                    }
-                    
-                    if missing_skills:
-                        st.write("Рекомендуемые курсы для улучшения навыков:")
-                        for skill in missing_skills:
-                            if skill in coursera_courses:
-                                st.write(f"- [{skill}]({coursera_courses[skill]})")
+                resume_id = result['id']
+                # Poll for the result
+                with st.spinner("Ожидание обработки резюме..."):
+                    for attempt in range(30):  # Poll for up to 150 seconds (30 * 5)
+                        time.sleep(5)
+                        check_response = requests.get(f"{API_URL}/resumes/{resume_id}")
+                        if check_response.status_code == 200:
+                            check_result = check_response.json()
+                            if check_result['predicted_salary'] != 0.0:
+                                # Processing complete
+                                st.success("Резюме успешно проанализировано!")
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.subheader("Детали резюме")
+                                    st.write(f"**Должность:** {check_result['title']}")
+                                    st.write(f"**Опыт:** {check_result['experience']} лет")
+                                    st.write(f"**Местоположение:** {check_result['location']}")
+                                    st.write(f"**Тип работы:** {check_result['job_type']}")
+                                    st.write(f"**Уровень должности:** {check_result['seniority_level']}")
+                                    st.write(f"**Удаленная работа:** {'Да' if check_result['is_remote'] else 'Нет'}")
+                                
+                                with col2:
+                                    st.subheader("Рекомендуемые курсы")
+                                    # Define a list of desired skills
+                                    desired_skills = ["Python", "Machine Learning", "Data Analysis", "SQL", "Deep Learning"]
+                                    
+                                    # Extract skills from the resume
+                                    resume_skills = set(check_result['key_skills'].split(', '))
+                                    
+                                    # Find missing skills
+                                    missing_skills = set(desired_skills) - resume_skills
+                                    
+                                    # Coursera course recommendations (you can expand this dictionary)
+                                    coursera_courses = {
+                                        "Python": "https://www.coursera.org/learn/python",
+                                        "Machine Learning": "https://www.coursera.org/learn/machine-learning",
+                                        "Data Analysis": "https://www.coursera.org/learn/data-analysis-with-python",
+                                        "SQL": "https://www.coursera.org/learn/sql-for-data-science",
+                                        "Deep Learning": "https://www.coursera.org/specializations/deep-learning"
+                                    }
+                                    
+                                    if missing_skills:
+                                        st.write("Рекомендуемые курсы для улучшения навыков:")
+                                        for skill in missing_skills:
+                                            if skill in coursera_courses:
+                                                st.write(f"- [{skill}]({coursera_courses[skill]})")
+                                    else:
+                                        st.write("У вас есть все необходимые навыки!")
+                                
+                                st.subheader("Прогноз зарплаты")
+                                if check_result['predicted_salary']:
+                                    salary = check_result['predicted_salary']
+                                    fig = go.Figure(go.Indicator(
+                                        mode = "number+gauge+delta",
+                                        value = salary,
+                                        domain = {'x': [0, 1], 'y': [0, 1]},
+                                        title = {'text': "Прогнозируемая зарплата"},
+                                        delta = {'reference': 100000},
+                                        gauge = {
+                                            'axis': {'range': [None, 200000]},
+                                            'bar': {'color': "#4CAF50"},
+                                            'steps': [
+                                                {'range': [0, 50000], 'color': "lightgray"},
+                                                {'range': [50000, 100000], 'color': "gray"}],
+                                            'threshold': {
+                                                'line': {'color': "red", 'width': 4},
+                                                'thickness': 0.75,
+                                                'value': 150000}}))
+                                    st.plotly_chart(fig)
+                                    st.write(f"Прогнозируемая зарплата: {salary:,.2f} ₽")
+                                else:
+                                    st.write("Прогноз зарплаты недоступен для этого резюме.")
+                                
+                                break
+                            else:
+                                st.info("Резюме еще обрабатывается...")
+                        else:
+                            st.error("Ошибка при проверке статуса резюме.")
+                            break
                     else:
-                        st.write("У вас есть все необходимые навыки!")
-                
-                st.subheader("Прогноз зарплаты")
-                if result['predicted_salary']:
-                    salary = result['predicted_salary']
-                    fig = go.Figure(go.Indicator(
-                        mode = "number+gauge+delta",
-                        value = salary,
-                        domain = {'x': [0, 1], 'y': [0, 1]},
-                        title = {'text': "Прогнозируемая зарплата"},
-                        delta = {'reference': 100000},
-                        gauge = {
-                            'axis': {'range': [None, 200000]},
-                            'bar': {'color': "#4CAF50"},
-                            'steps': [
-                                {'range': [0, 50000], 'color': "lightgray"},
-                                {'range': [50000, 100000], 'color': "gray"}],
-                            'threshold': {
-                                'line': {'color': "red", 'width': 4},
-                                'thickness': 0.75,
-                                'value': 150000}}))
-                    st.plotly_chart(fig)
-                    st.write(f"Прогнозируемая зарплата: {salary:,.2f} ₽")
-                else:
-                    st.write("Прогноз зарплаты недоступен для этого резюме.")
+                        st.error("Время ожидания истекло. Пожалуйста, попробуйте позже.")
             else:
-                st.error("Ошибка при анализе резюме. Пожалуйста, попробуйте еще раз.")
+                st.error("Ошибка при загрузке резюме. Пожалуйста, попробуйте еще раз.")
 
 # View All Resumes Tab
 with tab3:

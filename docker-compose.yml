@@ -1,3 +1,4 @@
+#docker-compose.yml
 version: '3.8'
 
 services:
@@ -10,8 +11,11 @@ services:
       - 8000:8000
     depends_on:
       - db
+      - rabbitmq
     environment:
       - DATABASE_URL=postgresql://user:password@db/resume_analyzer
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
 
   db:
     image: postgres:13
@@ -21,6 +25,15 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=resume_analyzer
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
 
   nginx:
     image: nginx:latest
@@ -40,6 +53,21 @@ services:
       - 8501:8501
     depends_on:
       - web
+
+  worker:
+    build: .
+    command: python -m worker.worker  # Run as a module
+    volumes:
+      - .:/app
+    depends_on:
+      - web
+      - rabbitmq
+    environment:
+      - DATABASE_URL=postgresql://user:password@db/resume_analyzer
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - PYTHONPATH=/app  # Explicitly set PYTHONPATH
+    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -1,33 +1,68 @@
-#routes/resume.py
+# routes/resume.py
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
+import pika
+import json
+import base64
+import os
+
 from app.services.crud import resume as crud
 from app.schemas import resume as schemas
 from app.database.database import get_db
-from app.services.pdf_parser import parse_pdf, extract_information
-from app.services.salary_predictor import salary_predictor
+# from app.services.salary_predictor import salary_predictor  # Removed if not used here
 
 router = APIRouter()
+
+def send_to_queue(resume_id: int, file_content: bytes):
+    rabbitmq_host = os.getenv("RABBITMQ_HOST", "rabbitmq")
+    rabbitmq_port = int(os.getenv("RABBITMQ_PORT", 5672))
+    
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host=rabbitmq_host, port=rabbitmq_port)
+    )
+    channel = connection.channel()
+
+    channel.queue_declare(queue='resume_queue', durable=True)
+
+    message = {
+        'resume_id': resume_id,
+        'file_content': base64.b64encode(file_content).decode('utf-8')
+    }
+
+    channel.basic_publish(
+        exchange='',
+        routing_key='resume_queue',
+        body=json.dumps(message),
+        properties=pika.BasicProperties(
+            delivery_mode=2,  # Make message persistent
+        )
+    )
+
+    connection.close()
 
 @router.post("/resumes/upload", response_model=schemas.Resume)
 async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_db)):
     content = await file.read()
-    parsed_text = parse_pdf(content)
-    print("Parsed text:", parsed_text)  # Debug print
 
-    extracted_info = extract_information(parsed_text)
-    print("Extracted info:", extracted_info)  # Debug print
+    # Create a new Resume entry with minimal info
+    resume = schemas.ResumeCreate(
+        title="Pending",
+        experience=0.0,
+        key_skills="Pending",
+        location="Pending",
+        job_type="Pending",
+        seniority_level="Pending",
+        is_remote=0,
+        predicted_salary=0.0
+    )
+    db_resume = crud.create_resume(db=db, resume=resume)
 
-    if salary_predictor is not None:
-        predicted_salary = salary_predictor.predict(extracted_info)
-    else:
-        predicted_salary = 0.0
+    # Send task to RabbitMQ
+    send_to_queue(db_resume.id, content)
 
-    extracted_info['predicted_salary'] = predicted_salary
-
-    resume = schemas.ResumeCreate(**extracted_info)
-    return crud.create_resume(db=db, resume=resume)
+    return db_resume
 
 @router.get("/resumes/", response_model=List[schemas.Resume])
 def read_resumes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
